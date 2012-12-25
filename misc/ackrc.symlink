@@ -1,0 +1,4 @@
+--type-add
+php=.ctp
+--type-set
+twig=.twig

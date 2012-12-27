@@ -310,28 +310,29 @@
 ;; settings for text file
 
 ;; settings for PHP
-(require 'php-mode)
-(setq local-php-manual-path
-      "/usr/lib/php/data/phpman/php-chunked-xhtml/index.html")
-(add-hook 'php-mode-hook
-          (lambda ()
-            (when (and (require 'cc-subword nil t)
-                       (fboundp 'c-subword-mode))
-              (c-subword-mode 1))
-            (c-set-style hnw/default-php-indentation-style)
-            ;; C-c RET: php-browse-manual
-            (if (file-readable-p local-php-manual-path)
-                (setq php-manual-url (concat "file://" local-php-manual-path))
-              (setq php-manual-url "http://www.php.net/manual/ja/"))
-            ;; C-c C-f: php-search-documentation
-            (setq php-search-url "http://jp2.php.net/")
-            ;; 関数の先頭・最後に移動
-            ;;(define-key php-mode-map "\C-\M-a" 'php-beginning-of-defun)
-            ;;(define-key php-mode-map "\C-\M-e" 'php-end-of-defun)
-            ;; indent
-            (setq tab-width 4
-                  indent-tabs-mode nil)
-            ))
+(when (require 'php-mode nil t)
+  (setq local-php-manual-path
+	"/usr/lib/php/data/phpman/php-chunked-xhtml/index.html")
+  (add-hook 'php-mode-hook
+	    (lambda ()
+	      (when (and (require 'cc-subword nil t)
+			 (fboundp 'c-subword-mode))
+		(c-subword-mode 1))
+	      (c-set-style hnw/default-php-indentation-style)
+	      ;; C-c RET: php-browse-manual
+	      (if (file-readable-p local-php-manual-path)
+		  (setq php-manual-url (concat "file://" local-php-manual-path))
+		(setq php-manual-url "http://www.php.net/manual/ja/"))
+	      ;; C-c C-f: php-search-documentation
+	      (setq php-search-url "http://jp2.php.net/")
+	      ;; 関数の先頭・最後に移動
+	      ;;(define-key php-mode-map "\C-\M-a" 'php-beginning-of-defun)
+	      ;;(define-key php-mode-map "\C-\M-e" 'php-end-of-defun)
+	      ;; indent
+	      (setq tab-width 4
+		    indent-tabs-mode nil)
+	      )))
+
 ;; php-modeで関数名を補完
 ;; C-M-iで利用中。
 ;; 辞書の作り方については下記URLを参照。
@@ -344,6 +345,7 @@
                  (setq php-completion-file my-php-completion-file)
                  ;; M-TAB が有効にならないので以下の設定を追加
                  (define-key php-mode-map "\C-\M-i" 'php-complete-function))))
+
 ;; *.twigをhtml-modeで開くように
 (setq auto-mode-alist (cons '("\\.twig$" . html-mode) auto-mode-alist))
 
@@ -826,3 +828,9 @@
 (setq sql-server "localhost")
 (setq sql-mysql-options "")
 
+;; ATOK対応
+;;「*scratch*」バッファでIMを有効化した状態で「(mac-get-current-input-source)」を評価(C-j）で分かる
+(setq default-input-method "MacOSX")
+(mac-set-input-method-parameter "com.justsystems.inputmethod.atok25.Japanese" `title "あ")
+(mac-set-input-method-parameter "com.justsystems.inputmethod.atok25.Japanese" `cursor-type 'box)
+(mac-set-input-method-parameter "com.justsystems.inputmethod.atok25.Japanese" `cursor-color "brown")

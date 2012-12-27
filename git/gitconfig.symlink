@@ -26,7 +26,7 @@
         branch = auto
         ui = true
 [core]
-        excludesfile = /opt/boxen/config/git/gitignore
+	excludesfile = ~/.gitignore
         # FIXME: You'll want the `excludesfile` line below; delete the one above.
         # excludesfile = ~/.gitignore
         editor = vim

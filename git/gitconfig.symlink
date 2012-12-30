@@ -8,9 +8,6 @@
 [user]
 	name = Yoshio HANAWA
 	email = y@hnw.jp
-        helper = /opt/boxen/bin/boxen-git-credential
-        # FIXME: You'll want the `helper` line below; delete the one above.
-        # helper = osxkeychain
 [alias]
         co = checkout
         promote = !$ZSH/bin/git-promote
@@ -27,8 +24,6 @@
         ui = true
 [core]
 	excludesfile = ~/.gitignore
-        # FIXME: You'll want the `excludesfile` line below; delete the one above.
-        # excludesfile = ~/.gitignore
         editor = vim
 	pager = lv -c
 [apply]
@@ -39,7 +34,3 @@
         prompt = false
 [help]
         autocorrect = 1
-
-# FIXME: You can nuke all of this on your machine.
-[credential]
-        helper = /opt/boxen/bin/boxen-git-credential

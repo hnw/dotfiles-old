@@ -1,16 +1,5 @@
 ;; .emacs
 
-(defun byte-compile-dot-emacs ()
-  "~/.emacsをコンパイルする"
-  (interactive)
-  (save-restriction
-    ;; 未定義の変数をsetqした場合のwarningを抑制する。
-    ;; バージョンごとに書ける内容が異なるので、個別に対応。
-    (if (>= emacs-major-version 23)
-        (setq byte-compile-warnings '(not free-vars obsolete))
-      (setq byte-compile-warnings '(unresolved callargs redefine obsolete noruntime cl-warnings interactive-only)))
-    (byte-compile-file (expand-file-name "~/.emacs"))))
-
 ;; add own directory to load-path
 (setq load-path
       (append
@@ -23,11 +12,29 @@
         )
        load-path))
 
-;;; .emacsより.emacs.elcの方が古かったら再度byte-compile。
-;;; できれば再読み込みしたいところだが、どう実現したものか…。
-;(if (file-newer-than-file-p (expand-file-name "~/.emacs")
-;                            (expand-file-name "~/.emacs.elc"))
-;    (byte-compile-dot-emacs))
+;; init.elをセーブすると勝手にコンパイルする
+(defun byte-compile-dot-emacs ()
+  "init.elを自動コンパイルする"
+  (interactive)
+  (save-restriction
+    ;; 未定義の変数をsetqした場合のwarningを抑制する。
+    ;; バージョンごとに書ける内容が異なるので、個別に対応。
+    (if (>= emacs-major-version 23)
+        (setq byte-compile-warnings '(not free-vars obsolete))
+      (setq byte-compile-warnings '(unresolved callargs redefine obsolete noruntime cl-warnings interactive-only)))
+    (byte-compile-file (expand-file-name "~/.emacs.d/init.el"))))
+
+(add-hook 'after-save-hook
+          (function (lambda ()
+                      (if (string= (file-truename (expand-file-name "~/.emacs.d/init.el"))
+                                   (file-truename (buffer-file-name)))
+                          (byte-compile-dot-emacs)))))
+
+;; init.elよりinit.elcの方が古かったら再度byte-compile。
+;; できれば再読み込みしたいところだが、どう実現したものか…。
+(if (file-newer-than-file-p (expand-file-name "~/.emacs.d/init.el")
+                            (expand-file-name "~/.emacs.d/init.elc"))
+    (byte-compile-dot-emacs))
 
 ;;; 文字コード関連の共通設定
 ;; 日本語をデフォルトにする。
@@ -656,14 +663,8 @@
                (flymake-mode-on)
                (setq flymake-is-active-flag nil))))
 
-;; 毎度自動コンパイル
-(add-hook 'after-save-hook
-          (function (lambda ()
-                      (if (string= (file-truename (expand-file-name "~/.emacs"))
-                                   (file-truename (buffer-file-name)))
-                          (byte-compile-dot-emacs)))))
-
 ;; タブ, 全角スペース、改行直前の半角スペースを表示する
+;; http://homepage3.nifty.com/satomii/software/elisp.ja.html
 (when (require 'jaspace nil t)
   (setq jaspace-modes (append jaspace-modes
                                 (list 'php-mode
@@ -755,8 +756,8 @@
 (when (require 'moz nil t)
   (defun hook-for-reloading-firefox ()
     (condition-case ERR
-        (if (and (boundp 'comint-send-string)
-                 (boundp 'inferior-moz-process))
+        (if (and (fboundp 'comint-send-string)
+                 (fboundp 'inferior-moz-process))
             (comint-send-string
              (inferior-moz-process)
              ;; URLのホスト部がlocalhostの場合のみリロード

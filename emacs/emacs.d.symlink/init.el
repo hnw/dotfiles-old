@@ -66,6 +66,7 @@
 ;; 適宜なんとかしてください。
 (setq my-resolution-alist
       '(
+        ("1366x768@24" 16  nil 37)   ; 16pt,81列37行(実質34行), MBA11@CocoaEmacs
         ("1366x768@23" 16  nil 39)   ; 16pt,81列39行(実質34行), MBA11@CocoaEmacs
 ;        ("1366x768@23" 24  nil 32)   ; 24pt,81列32行, MBA11@CocoaEmacs, プレゼン用
         ("1366x768@22" 16  nil 34)   ; 16pt,81列34行, MBA11@CarbonEmacs
@@ -835,3 +836,13 @@
 (mac-set-input-method-parameter "com.justsystems.inputmethod.atok25.Japanese" `title "あ")
 (mac-set-input-method-parameter "com.justsystems.inputmethod.atok25.Japanese" `cursor-type 'box)
 (mac-set-input-method-parameter "com.justsystems.inputmethod.atok25.Japanese" `cursor-color "brown")
+
+;; package.el
+
+(when (require 'package nil t)
+  (add-to-list 'package-archives
+               '("melpa" . "http://melpa.milkbox.net/packages/") t)
+  (package-initialize))
+
+
+

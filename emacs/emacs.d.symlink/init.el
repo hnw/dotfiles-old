@@ -66,6 +66,7 @@
 ;; 適宜なんとかしてください。
 (setq my-resolution-alist
       '(
+        ("1440x900@24" 16  nil 37)   ; 16pt,81列37行(実質34行), MBA11@CocoaEmacs
         ("1366x768@24" 16  nil 37)   ; 16pt,81列37行(実質34行), MBA11@CocoaEmacs
         ("1366x768@23" 16  nil 39)   ; 16pt,81列39行(実質34行), MBA11@CocoaEmacs
 ;        ("1366x768@23" 24  nil 32)   ; 24pt,81列32行, MBA11@CocoaEmacs, プレゼン用
@@ -281,12 +282,12 @@
 ;;;
 ;;; Org mode
 ;;;
-(require 'org-install)
-(add-to-list 'auto-mode-alist '("\\.org\\'" . org-mode))
-(global-set-key "\C-cl" 'org-store-link)
-(global-set-key "\C-cc" 'org-capture)
-(global-set-key "\C-ca" 'org-agenda)
-(global-set-key "\C-cb" 'org-iswitchb)
+(when (require 'org-install nil t)
+  (add-to-list 'auto-mode-alist '("\\.org\\'" . org-mode))
+  (global-set-key "\C-cl" 'org-store-link)
+  (global-set-key "\C-cc" 'org-capture)
+  (global-set-key "\C-ca" 'org-agenda)
+  (global-set-key "\C-cb" 'org-iswitchb))
 
 ;;; settings for italk
 (autoload 'italk "italk" "Inter talk" t nil)
@@ -318,28 +319,28 @@
 ;; settings for text file
 
 ;; settings for PHP
-(when (require 'php-mode nil t)
-  (setq local-php-manual-path
-	"/usr/lib/php/data/phpman/php-chunked-xhtml/index.html")
-  (add-hook 'php-mode-hook
-	    (lambda ()
-	      (when (and (require 'cc-subword nil t)
-			 (fboundp 'c-subword-mode))
-		(c-subword-mode 1))
-	      (c-set-style hnw/default-php-indentation-style)
-	      ;; C-c RET: php-browse-manual
-	      (if (file-readable-p local-php-manual-path)
-		  (setq php-manual-url (concat "file://" local-php-manual-path))
-		(setq php-manual-url "http://www.php.net/manual/ja/"))
-	      ;; C-c C-f: php-search-documentation
-	      (setq php-search-url "http://jp2.php.net/")
-	      ;; 関数の先頭・最後に移動
-	      ;;(define-key php-mode-map "\C-\M-a" 'php-beginning-of-defun)
-	      ;;(define-key php-mode-map "\C-\M-e" 'php-end-of-defun)
-	      ;; indent
-	      (setq tab-width 4
-		    indent-tabs-mode nil)
-	      )))
+(autoload 'php-mode "php-mode" "Major mode for editing php code." t)
+(add-to-list 'auto-mode-alist '("\\.php$" . php-mode))
+(setq local-php-manual-path
+      "/usr/lib/php/data/phpman/php-chunked-xhtml/index.html")
+(add-hook 'php-mode-hook
+          (lambda ()
+            (when (and (require 'cc-subword nil t)
+                       (fboundp 'c-subword-mode))
+              (c-subword-mode 1))
+            (c-set-style hnw/default-php-indentation-style)
+            ;; C-c RET: php-browse-manual
+            (if (file-readable-p local-php-manual-path)
+                (setq php-manual-url (concat "file://" local-php-manual-path))
+              (setq php-manual-url "http://www.php.net/manual/ja/"))
+            ;; C-c C-f: php-search-documentation
+            (setq php-search-url "http://jp2.php.net/")
+            ;; 関数の先頭・最後に移動
+            ;;(define-key php-mode-map "\C-\M-a" 'php-beginning-of-defun)
+            ;;(define-key php-mode-map "\C-\M-e" 'php-end-of-defun)
+            ;; indent
+            (setq tab-width 4
+                  indent-tabs-mode nil)))
 
 ;; php-modeで関数名を補完
 ;; C-M-iで利用中。
@@ -752,29 +753,29 @@
 (unless (server-running-p)
   (server-start))
 
-;; MozReplを使って、セーブすると同時にFirefoxをリロード
-;; http://www.emacswiki.org/emacs/MozRepl#toc2
-(when (require 'moz nil t)
-  (defun hook-for-reloading-firefox ()
-    (condition-case ERR
-        (if (and (fboundp 'comint-send-string)
-                 (fboundp 'inferior-moz-process))
-            (comint-send-string
-             (inferior-moz-process)
-             ;; URLのホスト部がlocalhostの場合のみリロード
-             "if (content.location.host == \"localhost\") { BrowserReload(); }"))
-      (error (progn
-               ;; MozReplに接続できなかった場合はremove-hookする。
-               (remove-hook 'after-save-hook 'hook-for-reloading-firefox 'local)
-               (message "removed hook for MozRepl.")))))
-  (defun auto-reload-firefox-on-after-save-hook ()
-    ;; buffer-local
-    (add-hook 'after-save-hook 'hook-for-reloading-firefox 'append 'local))
-  ;;MozReplのポート番号。MozReplの待ち受けポートを変えた場合に適宜変更してください。
-  (setq moz-repl-port 5858)
-  (add-hook 'php-mode-hook 'auto-reload-firefox-on-after-save-hook)
-  (add-hook 'html-mode-hook 'auto-reload-firefox-on-after-save-hook)
-  (add-hook 'css-mode-hook 'auto-reload-firefox-on-after-save-hook))
+;;; MozReplを使って、セーブすると同時にFirefoxをリロード
+;;; http://www.emacswiki.org/emacs/MozRepl#toc2
+;(when (require 'moz nil t)
+;  (defun hook-for-reloading-firefox ()
+;    (condition-case ERR
+;        (if (and (fboundp 'comint-send-string)
+;                 (fboundp 'inferior-moz-process))
+;            (comint-send-string
+;             (inferior-moz-process)
+;             ;; URLのホスト部がlocalhostの場合のみリロード
+;             "if (content.location.host == \"localhost\") { BrowserReload(); }"))
+;      (error (progn
+;               ;; MozReplに接続できなかった場合はremove-hookする。
+;               (remove-hook 'after-save-hook 'hook-for-reloading-firefox 'local)
+;               (message "removed hook for MozRepl.")))))
+;  (defun auto-reload-firefox-on-after-save-hook ()
+;    ;; buffer-local
+;    (add-hook 'after-save-hook 'hook-for-reloading-firefox 'append 'local))
+;  ;;MozReplのポート番号。MozReplの待ち受けポートを変えた場合に適宜変更してください。
+;  (setq moz-repl-port 5858)
+;  (add-hook 'php-mode-hook 'auto-reload-firefox-on-after-save-hook)
+;  (add-hook 'html-mode-hook 'auto-reload-firefox-on-after-save-hook)
+;  (add-hook 'css-mode-hook 'auto-reload-firefox-on-after-save-hook))
 
 ;(setq tramp-terminal-type "dumb")
 ;(setq shell-prompt-pattern "^[^>$][>$] *")
@@ -845,4 +846,15 @@
   (package-initialize))
 
 
-
+(custom-set-variables
+ ;; custom-set-variables was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(haskell-mode-hook (quote (turn-on-haskell-indentation))))
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ )

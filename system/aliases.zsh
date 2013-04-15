@@ -9,12 +9,25 @@ then
   alias la='gls -A --color'
 fi
 
+# dealing with BSD od (different to GNU od)
 \od -tx1z -Ax </dev/null >/dev/null 2>&1
+
 if [ "$?" -eq "0" ]; then
   # found GNU od
-  alias hd='od -tx1z -Ax'
+  GNU_OD="od"
 else
-  # found BSD od
+  \god -tx1z -Ax </dev/null >/dev/null 2>&1
+  if [ "$?" -eq "0" ]; then
+    # found GNU od
+    GNU_OD="god"
+  else
+    GNU_OD=""
+  fi
+fi
+
+if [ -n "$GNU_OD" ] ; then
+  alias hd="$GNU_OD -tx1z -Ax"
+else
   alias hd='od -tx1 -Ax'
 fi
 

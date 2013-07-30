@@ -66,7 +66,8 @@
 ;; 適宜なんとかしてください。
 (setq my-resolution-alist
       '(
-        ("1440x900@24" 16  nil 37)   ; 16pt,81列37行(実質34行), MBA11@CocoaEmacs
+        ("1440x900@24" 16  nil 37)   ; 16pt,81列37行(実質32行), MBA13@CocoaEmacs
+;        ("1440x900@24" 24  nil 32)   ; 24pt,81列32行(実質27行), MBA13@CocoaEmacs
         ("1366x768@24" 16  nil 37)   ; 16pt,81列37行(実質34行), MBA11@CocoaEmacs
         ("1366x768@23" 16  nil 39)   ; 16pt,81列39行(実質34行), MBA11@CocoaEmacs
 ;        ("1366x768@23" 24  nil 32)   ; 24pt,81列32行, MBA11@CocoaEmacs, プレゼン用
@@ -849,6 +850,7 @@
 
 ;; Using customization file
 ;; http://www.gnu.org/software/emacs/manual/html_node/emacs/Saving-Customizations.html
+
 (setq custom-file "~/.emacs.d/conf/customize.el")
 (when (file-exists-p (expand-file-name custom-file))
   (load (expand-file-name custom-file) t nil nil))

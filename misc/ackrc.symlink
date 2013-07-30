@@ -2,3 +2,5 @@
 php=.ctp
 --type-set
 twig=.twig
+--type-set
+yacc=.y

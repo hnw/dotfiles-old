@@ -215,11 +215,22 @@
 (when (fboundp 'tool-bar-mode)
   (tool-bar-mode 0))
 
-(setq exec-path
-      (append
-       (list "/opt/local/bin"
-             "/opt/local/lib/erlang/bin")
-       exec-path))
+;; http://sakito.jp/emacs/emacsshell.html#path
+;; 後に記述したものの方が PATH の先頭に追加されます
+(dolist (dir (list
+              "/sbin"
+              "/usr/sbin"
+              "/bin"
+              "/usr/bin"
+              "/usr/local/sbin"
+              "/usr/local/bin"
+              (expand-file-name "~/bin")
+              ))
+  ;; PATH と exec-path に同じ内容を追加します
+  (when ;; (and
+         (file-exists-p dir) ;; (not (member dir exec-path)))
+    (setenv "PATH" (concat dir ":" (getenv "PATH")))
+    (setq exec-path (append (list dir) exec-path))))
 
 ;; Avoid running silly /usr/share/emacs/site-lisp/default.el.
 ;; (for Fedora/RHEL/CentOS)
@@ -247,6 +258,36 @@
 
 ;; avoid "Symbolic link to SVN-controlled source file; follow link? (yes or no)"
 (setq vc-follow-symlinks t)
+
+;; package.el
+
+(when (require 'package nil t)
+  (add-to-list 'package-archives
+               '("melpa" . "http://melpa.milkbox.net/packages/") t)
+  (add-to-list 'package-archives
+               '("marmalade" . "http://marmalade-repo.org/packages/") t)
+  (package-initialize))
+
+(defvar installing-package-list
+  '(
+    ;; ここに使っているパッケージを書く。
+    php-mode
+    haskell-mode
+    yaml-mode
+    open-junk-file
+    gtags
+    ))
+
+(eval-when-compile
+  (require 'cl))
+
+(let ((not-installed (loop for x in installing-package-list
+                            when (not (package-installed-p x))
+                            collect x)))
+  (when not-installed
+    (package-refresh-contents)
+    (dolist (pkg not-installed)
+        (package-install pkg))))
 
 ;; anthy.el をロードする。
 (if (require 'anthy nil t)
@@ -839,14 +880,45 @@
 (mac-set-input-method-parameter "com.justsystems.inputmethod.atok25.Japanese" `cursor-type 'box)
 (mac-set-input-method-parameter "com.justsystems.inputmethod.atok25.Japanese" `cursor-color "brown")
 
-;; package.el
+;; anything.el
 
-(when (require 'package nil t)
-  (add-to-list 'package-archives
-               '("melpa" . "http://melpa.milkbox.net/packages/") t)
-  (add-to-list 'package-archives
-               '("marmalade" . "http://marmalade-repo.org/packages/") t)
-  (package-initialize))
+(defvar org-directory "")
+(when (require 'anything nil t)
+  (require 'anything-config)
+  (require 'anything-match-plugin)
+  (require 'anything-complete)
+  (when (fboundp 'anything-read-string-mode)
+    (anything-read-string-mode 1))
+  (require 'anything-show-completion)
+  (global-set-key "\C-x\C-b" 'anything-filelist+)
+  (global-set-key "\M-y" 'anything-show-kill-ring)
+
+  (define-key global-map (kbd "C-x b") 'anything)
+
+  (setq recentf-max-saved-items 500)
+  (recentf-mode 1)
+)
+;; gtags
+
+(require 'gtags)
+(setq gtags-suggested-key-mapping t)
+(add-hook 'c-mode-common-hook
+          '(lambda()
+             (gtags-mode 1)))
+
+;; キーバインド
+;(setq gtags-mode-hook
+;      '(lambda ()
+;         (define-key gtags-mode-map "\C-cs" 'gtags-find-symbol)
+;         (define-key gtags-mode-map "\C-cr" 'gtags-find-rtag)
+;         (define-key gtags-mode-map "\C-ct" 'gtags-find-tag)
+;         (define-key gtags-mode-map "\C-cf" 'gtags-parse-file)))
+
+;; open-junk-file
+
+(require 'open-junk-file)
+(setq open-junk-file-format "~/Dropbox/junk/%Y/%m/%Y-%m-%d-%H%M%S.")
+(global-set-key (kbd "C-x j") 'open-junk-file)
 
 ;; Using customization file
 ;; http://www.gnu.org/software/emacs/manual/html_node/emacs/Saving-Customizations.html

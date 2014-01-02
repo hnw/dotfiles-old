@@ -1,6 +1,7 @@
 ;; .emacs
 
 ;; add own directory to load-path
+
 (setq load-path
       (append
        (list
@@ -11,6 +12,73 @@
         "/opt/local/lib/erlang/lib/tools-2.6.1/emacs/"
         )
        load-path))
+
+;; package.el
+
+(when (require 'package nil t)
+  (add-to-list 'package-archives
+               '("melpa" . "http://melpa.milkbox.net/packages/") t)
+  (add-to-list 'package-archives
+               '("marmalade" . "http://marmalade-repo.org/packages/") t)
+  (package-initialize))
+
+(eval-when-compile
+  (require 'cl))
+
+(defvar installing-package-list
+  '(
+    ;; ここに使っているパッケージを書く。
+    php-mode
+    haskell-mode
+    csharp-mode
+    yaml-mode
+    open-junk-file
+    gtags
+    anything
+    ))
+
+(let ((not-installed (loop for x in installing-package-list
+                            when (not (package-installed-p x))
+                            collect x)))
+  (when not-installed
+    (package-refresh-contents)
+    (dolist (pkg not-installed)
+        (package-install pkg))))
+
+;; ネットワーク経由で取得したelをpackage.el管理する
+;; http://www.robario.com/2013/08/07
+
+(defun package-install-from-url (url)
+  "URLを指定してパッケージをインストールする"
+  (interactive "sURL: ")
+  (let ((file (and (string-match "\\([a-z0-9-]+\\)\\.el" url) (match-string-no-properties 1 url))))
+    (with-current-buffer (url-retrieve-synchronously url)
+      (goto-char (point-min))
+      (delete-region (point-min) (search-forward "\n\n"))
+      (goto-char (point-min))
+      (setq info (cond ((condition-case nil (package-buffer-info) (error nil)))
+                       ((re-search-forward "[$]Id: .+,v \\([0-9.]+\\) .*[$]" nil t)
+                        (vector file nil (concat "[my:package-install-from-url]") (match-string-no-properties 1) ""))
+                       (t (vector file nil (concat file "[my:package-install-from-url]") (format-time-string "%Y%m%d") ""))))
+      (package-install-from-buffer info 'single)
+      (kill-buffer)
+      )))
+
+(defvar installing-package-url-assoc
+  '(
+    ;; ここに使っているパッケージを書く。
+    ;; 1ファイルのelのみ管理できる
+    (dabbrev-ja . "http://namazu.org/~tsuchiya/elisp/dabbrev-ja.el")
+    (auto-save-buffers . "http://homepage3.nifty.com/oatu/emacs/archives/auto-save-buffers.el")
+    ))
+
+(let ((not-installed (loop for (package . url) in installing-package-url-assoc
+                            when (not (package-installed-p package))
+                            collect url)))
+  (when not-installed
+    (package-refresh-contents)
+    (dolist (url not-installed)
+        (package-install-from-url url))))
 
 ;; init.elをセーブすると勝手にコンパイルする
 (defun byte-compile-dot-emacs ()
@@ -182,19 +250,17 @@
                 (list (cons 'cursor-color my-roman-cursor-color))
                 default-frame-alist))
          (when (fboundp 'mac-set-input-method-parameter)
-           (mac-set-input-method-parameter
-            "com.justsystems.inputmethod.atok24.Japanese"
-            'cursor-color my-japanese-cursor-color)
-           (mac-set-input-method-parameter
-            "com.justsystems.inputmethod.atok24.Japanese.Katakana"
-            'cursor-color my-japanese-cursor-color)
-           (mac-set-input-method-parameter
-            "com.justsystems.inputmethod.atok24.Japanese.FullWidthRoman"
-            'cursor-color my-japanese-cursor-color)
-           (mac-set-input-method-parameter
-            "com.justsystems.inputmethod.atok24.Japanese.HalfWidthEiji"
-            'cursor-color my-japanese-cursor-color)
-           )
+           (dolist (japanese-input-source
+                    ;; ATOK対応
+                    ;;「*scratch*」バッファでIMを有効化した状態で「(mac-get-current-input-source)」を評価(C-j）で分かる
+                    '("com.justsystems.inputmethod.atok24.Japanese"
+                      "com.justsystems.inputmethod.atok25.Japanese"
+                      "com.justsystems.inputmethod.atok26.Japanese"
+                      ))
+             (mac-set-input-method-parameter japanese-input-source 'title "あ")
+             (mac-set-input-method-parameter japanese-input-source 'cursor-type 'box)
+             (mac-set-input-method-parameter japanese-input-source 'cursor-color my-japanese-cursor-color)
+             ))
          ))
   ;; 以下、Mac環境共通の設定
   (setq mac-command-key-is-meta t)
@@ -258,36 +324,6 @@
 
 ;; avoid "Symbolic link to SVN-controlled source file; follow link? (yes or no)"
 (setq vc-follow-symlinks t)
-
-;; package.el
-
-(when (require 'package nil t)
-  (add-to-list 'package-archives
-               '("melpa" . "http://melpa.milkbox.net/packages/") t)
-  (add-to-list 'package-archives
-               '("marmalade" . "http://marmalade-repo.org/packages/") t)
-  (package-initialize))
-
-(defvar installing-package-list
-  '(
-    ;; ここに使っているパッケージを書く。
-    php-mode
-    haskell-mode
-    yaml-mode
-    open-junk-file
-    gtags
-    ))
-
-(eval-when-compile
-  (require 'cl))
-
-(let ((not-installed (loop for x in installing-package-list
-                            when (not (package-installed-p x))
-                            collect x)))
-  (when not-installed
-    (package-refresh-contents)
-    (dolist (pkg not-installed)
-        (package-install pkg))))
 
 ;; anthy.el をロードする。
 (if (require 'anthy nil t)
@@ -475,6 +511,24 @@
 (add-hook 'c++-mode-hook
           (lambda ()
             (setq indent-tabs-mode nil)))
+
+;; settings for C#
+;; http://ongaeshi.hatenablog.com/entry/20110116/1295187496
+(add-hook 'csharp-mode-hook
+          '(lambda()
+             ;; オフセットの調整
+             (c-set-offset 'substatement-open '0)
+             (c-set-offset 'case-label '+)
+             (c-set-offset 'arglist-intro '+)
+             (c-set-offset 'arglist-close '0)
+
+             (setq comment-column 40)
+             (setq c-basic-offset 4)
+             (setq indent-tabs-mode nil)
+
+             (font-lock-add-magic-number)
+             )
+          )
 
 ;; settings for HTML
 (add-hook 'html-mode-hook
@@ -873,13 +927,6 @@
 (setq sql-server "localhost")
 (setq sql-mysql-options "")
 
-;; ATOK対応
-;;「*scratch*」バッファでIMを有効化した状態で「(mac-get-current-input-source)」を評価(C-j）で分かる
-(setq default-input-method "MacOSX")
-(mac-set-input-method-parameter "com.justsystems.inputmethod.atok25.Japanese" `title "あ")
-(mac-set-input-method-parameter "com.justsystems.inputmethod.atok25.Japanese" `cursor-type 'box)
-(mac-set-input-method-parameter "com.justsystems.inputmethod.atok25.Japanese" `cursor-color "brown")
-
 ;; anything.el
 
 (defvar org-directory "")
@@ -898,13 +945,14 @@
   (setq recentf-max-saved-items 500)
   (recentf-mode 1)
 )
+
 ;; gtags
 
-(require 'gtags)
-(setq gtags-suggested-key-mapping t)
-(add-hook 'c-mode-common-hook
-          '(lambda()
-             (gtags-mode 1)))
+(when (require 'gtags nil t)
+  (setq gtags-suggested-key-mapping t)
+  (add-hook 'c-mode-common-hook
+            '(lambda()
+               (gtags-mode 1))))
 
 ;; キーバインド
 ;(setq gtags-mode-hook
@@ -916,9 +964,9 @@
 
 ;; open-junk-file
 
-(require 'open-junk-file)
-(setq open-junk-file-format "~/Dropbox/junk/%Y/%m/%Y-%m-%d-%H%M%S.")
-(global-set-key (kbd "C-x j") 'open-junk-file)
+(when (require 'open-junk-file nil t)
+  (setq open-junk-file-format "~/Dropbox/junk/%Y/%m/%Y-%m-%d-%H%M%S.")
+  (global-set-key (kbd "C-x j") 'open-junk-file))
 
 ;; Using customization file
 ;; http://www.gnu.org/software/emacs/manual/html_node/emacs/Saving-Customizations.html

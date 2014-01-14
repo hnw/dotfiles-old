@@ -14,20 +14,11 @@
        load-path))
 
 ;; package.el
+;; http://qiita.com/catatsuy/items/5f1cd86e2522fd3384a0
+;; http://www.robario.com/2013/08/07
 
-(when (require 'package nil t)
-  (add-to-list 'package-archives
-               '("melpa" . "http://melpa.milkbox.net/packages/") t)
-  (add-to-list 'package-archives
-               '("marmalade" . "http://marmalade-repo.org/packages/") t)
-  (package-initialize))
-
-(eval-when-compile
-  (require 'cl))
-
-(defvar installing-package-list
+(defvar my/favorite-packages
   '(
-    ;; ここに使っているパッケージを書く。
     php-mode
     haskell-mode
     csharp-mode
@@ -35,19 +26,19 @@
     open-junk-file
     gtags
     anything
-    ))
+    )
+  "起動時に自動的にインストールされるパッケージのリスト")
 
-(let ((not-installed (loop for x in installing-package-list
-                            when (not (package-installed-p x))
-                            collect x)))
-  (when not-installed
-    (package-refresh-contents)
-    (dolist (pkg not-installed)
-        (package-install pkg))))
+(defvar my/favorite-package-urls
+  '(
+    ;; 1ファイルのelispしか管理できません
+    ;; パッケージ名はファイル名の.elより前の部分になります
+    "http://namazu.org/~tsuchiya/elisp/dabbrev-ja.el"
+    "http://homepage3.nifty.com/oatu/emacs/archives/auto-save-buffers.el"
+    )
+  "起動時に自動的にインストールされるelispのURLのリスト")
 
-;; ネットワーク経由で取得したelをpackage.el管理する
-;; http://www.robario.com/2013/08/07
-
+;; ネットワーク経由で取得したelispをpackage.el管理する
 (defun package-install-from-url (url)
   "URLを指定してパッケージをインストールする"
   (interactive "sURL: ")
@@ -64,21 +55,36 @@
       (kill-buffer)
       )))
 
-(defvar installing-package-url-assoc
-  '(
-    ;; ここに使っているパッケージを書く。
-    ;; 1ファイルのelのみ管理できる
-    (dabbrev-ja . "http://namazu.org/~tsuchiya/elisp/dabbrev-ja.el")
-    (auto-save-buffers . "http://homepage3.nifty.com/oatu/emacs/archives/auto-save-buffers.el")
-    ))
+(defun package-url-installed-p (url)
+  "指定されたURLに対応するパッケージがインストールされているか調べる"
+  (interactive "sURL: ")
+  (let ((pkg-name (and (string-match "\\([a-z0-9-]+\\)\\.el" url) (match-string-no-properties 1 url))))
+    (package-installed-p (intern pkg-name))))
 
-(let ((not-installed (loop for (package . url) in installing-package-url-assoc
-                            when (not (package-installed-p package))
-                            collect url)))
-  (when not-installed
-    (package-refresh-contents)
-    (dolist (url not-installed)
-        (package-install-from-url url))))
+(eval-when-compile
+  (require 'cl))
+
+(when (require 'package nil t)
+  (add-to-list 'package-archives
+               '("melpa" . "http://melpa.milkbox.net/packages/") t)
+  (add-to-list 'package-archives
+               '("marmalade" . "http://marmalade-repo.org/packages/") t)
+  (package-initialize)
+  (let ((pkgs (loop for pkg in my/favorite-packages
+                    unless (package-installed-p pkg)
+                    collect pkg)))
+    (when pkgs
+      ;; check for new packages (package versions)
+      (message "%s" "Get latest versions of all packages...")
+      (package-refresh-contents)
+      (message "%s" " done.")
+      (dolist (pkg pkgs)
+        (package-install pkg))))
+  (let ((urls (loop for url in my/favorite-package-urls
+                    unless (package-url-installed-p url)
+                    collect url)))
+    (dolist (url urls)
+      (package-install-from-url url))))
 
 ;; init.elをセーブすると勝手にコンパイルする
 (defun byte-compile-dot-emacs ()
@@ -516,17 +522,17 @@
 ;; http://ongaeshi.hatenablog.com/entry/20110116/1295187496
 (add-hook 'csharp-mode-hook
           '(lambda()
+             (setq comment-column 40)
+             (setq c-basic-offset 4)
+             (setq indent-tabs-mode nil)
+
              ;; オフセットの調整
              (c-set-offset 'substatement-open '0)
              (c-set-offset 'case-label '+)
              (c-set-offset 'arglist-intro '+)
              (c-set-offset 'arglist-close '0)
 
-             (setq comment-column 40)
-             (setq c-basic-offset 4)
-             (setq indent-tabs-mode nil)
-
-             (font-lock-add-magic-number)
+             ;(font-lock-add-magic-number)
              )
           )
 
@@ -833,8 +839,11 @@
 
 ;; auto-save-buffers: Emacsでファイルの自動保存
 ;; http://0xcc.net/misc/auto-save/
+;;
+;; ただし、TRAMPでssh接続している場合auto-saveと相性が悪すぎるので除外
+;; また、auto-save-buffersと最近のhaskell-modeの相性が悪いので除外
 (when (require 'auto-save-buffers nil t)
-  (run-with-idle-timer 0.5 t 'auto-save-buffers "" "^/sshx?:.*$"))
+  (run-with-idle-timer 0.5 t 'auto-save-buffers "" "^\\(sshx?:.*\\|.*\\.hs\\)$"))
 
 ;; keychain ENV setting (for MacOSX 10.4 only?)
 ;(if (require 'keychain-environment nil t)
@@ -945,6 +954,13 @@
   (setq recentf-max-saved-items 500)
   (recentf-mode 1)
 )
+
+;; 以前開いたファイルを再度開いたとき、元のカーソル位置を復元する
+;; http://www.emacswiki.org/emacs/SavePlace
+
+(when (require 'saveplace nil t)
+  (setq-default save-place t)
+  (setq save-place-file "~/.emacs.d/saved-places"))
 
 ;; gtags
 

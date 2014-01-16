@@ -1,5 +1,12 @@
 ;; .emacs
 
+;; http://www.sodan.org/~knagano/emacs/dotemacs.html
+;; （バイトコンパイル時のwarningを抑止する目的に使っている）
+(defmacro exec-if-bound (sexplist)
+  "関数が存在する時だけ実行する（car の fboundp を調べるだけ）"
+  `(if (fboundp (car ',sexplist))
+       ,sexplist))
+
 ;; add own directory to load-path
 
 (setq load-path
@@ -26,6 +33,7 @@
     open-junk-file
     gtags
     anything
+    auto-async-byte-compile
     )
   "起動時に自動的にインストールされるパッケージのリスト")
 
@@ -47,7 +55,7 @@
       (goto-char (point-min))
       (delete-region (point-min) (search-forward "\n\n"))
       (goto-char (point-min))
-      (setq info (cond ((condition-case nil (package-buffer-info) (error nil)))
+      (setq info (cond ((condition-case nil (exec-if-bound (package-buffer-info)) (error nil)))
                        ((re-search-forward "[$]Id: .+,v \\([0-9.]+\\) .*[$]" nil t)
                         (vector file nil (concat "[my:package-install-from-url]") (match-string-no-properties 1) ""))
                        (t (vector file nil (concat file "[my:package-install-from-url]") (format-time-string "%Y%m%d") ""))))
@@ -59,7 +67,7 @@
   "指定されたURLに対応するパッケージがインストールされているか調べる"
   (interactive "sURL: ")
   (let ((pkg-name (and (string-match "\\([a-z0-9-]+\\)\\.el" url) (match-string-no-properties 1 url))))
-    (package-installed-p (intern pkg-name))))
+    (exec-if-bound (package-installed-p (intern pkg-name)))))
 
 (eval-when-compile
   (require 'cl))
@@ -71,7 +79,7 @@
                '("marmalade" . "http://marmalade-repo.org/packages/") t)
   (package-initialize)
   (let ((pkgs (loop for pkg in my/favorite-packages
-                    unless (package-installed-p pkg)
+                    unless (exec-if-bound (package-installed-p pkg))
                     collect pkg)))
     (when pkgs
       ;; check for new packages (package versions)
@@ -87,28 +95,84 @@
       (package-install-from-url url))))
 
 ;; init.elをセーブすると勝手にコンパイルする
-(defun byte-compile-dot-emacs ()
-  "init.elを自動コンパイルする"
+;(defun byte-compile-dot-emacs ()
+;  "init.elを自動コンパイルする"
+;  (interactive)
+;  (save-restriction
+;    ;; 未定義の変数をsetqした場合のwarningを抑制する。
+;    ;; バージョンごとに書ける内容が異なるので、個別に対応。
+;    (if (>= emacs-major-version 23)
+;        (setq byte-compile-warnings '(not free-vars obsolete))
+;      (setq byte-compile-warnings '(unresolved callargs redefine obsolete noruntime cl-warnings interactive-only)))
+;    (byte-compile-file (expand-file-name "~/.emacs.d/init.el"))))
+
+;(add-hook 'emacs-lisp-mode-hook
+;          (lambda ()
+;            (message "hogehoge! %s" (buffer-file-name))))
+
+;(add-hook 'emacs-lisp-mode-hook
+;          (lambda ()
+;            (add-hook 'after-save-hook
+;                      (lambda ()
+;                        (if (string= (file-truename (expand-file-name "~/.emacs.d/init.el"))
+;                                     (file-truename (buffer-file-name)))
+;                            (byte-compile-dot-emacs))))))
+
+(defun my-emacs-lisp-byte-compile (source)
   (interactive)
-  (save-restriction
-    ;; 未定義の変数をsetqした場合のwarningを抑制する。
-    ;; バージョンごとに書ける内容が異なるので、個別に対応。
-    (if (>= emacs-major-version 23)
-        (setq byte-compile-warnings '(not free-vars obsolete))
-      (setq byte-compile-warnings '(unresolved callargs redefine obsolete noruntime cl-warnings interactive-only)))
-    (byte-compile-file (expand-file-name "~/.emacs.d/init.el"))))
+  (if (save-window-excursion
+        (let ((byte-compile-warnings
+               (if (>= emacs-major-version 23)
+                   '(not free-vars obsolete)
+                 '(unresolved callargs redefine obsolete noruntime cl-warnings interactive-only))))
+           (byte-compile-file source)))
+      (message "current buffer is successfully byte-compiled.")
+    (let (errs errl errc errp)
+      (switch-to-buffer (find-file source))
+      (with-current-buffer "*Compile-Log*"
+        (goto-char (point-max))
+        (forward-line -1)
+        ;; *Compile-Log* がエラー箇所の情報を含まないときだけ
+        ;;  *Compiler Input* に基づきジャンプ
+        (cond ((re-search-forward "^.+:\\([0-9]+\\):\\([0-9]+\\):\\(Warning\\|Error\\): \\(.+\\)$" nil t)
+               (setq errl (string-to-number (match-string 1))
+                     errc (string-to-number (match-string 2))
+                     errs (match-string 4)))
+              ((re-search-forward "!! \\(.+\\)" nil t)
+               (setq errp (with-current-buffer " *Compiler Input*"
+                            (point))
+                     errs (match-string 1)))))
+      (cond (errp (unless (= errp (point-max)) (goto-char errp)))
+            (t (forward-line errl) (forward-char errc)))
+      (message errs))))
 
-(add-hook 'after-save-hook
-          (function (lambda ()
-                      (if (string= (file-truename (expand-file-name "~/.emacs.d/init.el"))
-                                   (file-truename (buffer-file-name)))
-                          (byte-compile-dot-emacs)))))
+;; init.elcよりinit.elの方が新しかったら再度byte-compileする
+(defun user-init-file-byte-compile-if-needed ()
+  (interactive)
+  (when (and user-init-file
+             (equal (file-name-extension user-init-file) "elc"))
+    (let* ((source (file-name-sans-extension user-init-file))
+           (alt (concat source ".el")))
+      (setq source (cond ((file-exists-p alt) alt)
+                         ((file-exists-p source) source)
+                         (t nil)))
+      (when (and source
+                 (file-newer-than-file-p source user-init-file))
+        (my-emacs-lisp-byte-compile source)))))
 
-;; init.elよりinit.elcの方が古かったら再度byte-compile。
-;; できれば再読み込みしたいところだが、どう実現したものか…。
-(if (file-newer-than-file-p (expand-file-name "~/.emacs.d/init.el")
-                            (expand-file-name "~/.emacs.d/init.elc"))
-    (byte-compile-dot-emacs))
+(user-init-file-byte-compile-if-needed)
+
+;        (byte-compile-file source)
+;        (load-file source)
+;        (eval-buffer nil nil)
+;        (delete-other-windows)))))
+
+; (my-emacs-lisp-byte-compile "~/.emacs.d/init.el")
+
+(when (require 'auto-async-byte-compile nil t)
+  (setq auto-async-byte-compile-init-file "~/.emacs.d/async-compile-init.el")
+  (add-hook 'emacs-lisp-mode-hook 'enable-auto-async-byte-compile-mode))
+
 
 ;;; 文字コード関連の共通設定
 ;; 日本語をデフォルトにする。
@@ -141,10 +205,10 @@
 (setq my-resolution-alist
       '(
         ("1440x900@24" 16  nil 37)   ; 16pt,81列37行(実質32行), MBA13@CocoaEmacs
-;        ("1440x900@24" 24  nil 32)   ; 24pt,81列32行(実質27行), MBA13@CocoaEmacs
+        ;("1440x900@24" 24  nil 32)   ; 24pt,81列32行(実質27行), MBA13@CocoaEmacs
         ("1366x768@24" 16  nil 37)   ; 16pt,81列37行(実質34行), MBA11@CocoaEmacs
         ("1366x768@23" 16  nil 39)   ; 16pt,81列39行(実質34行), MBA11@CocoaEmacs
-;        ("1366x768@23" 24  nil 32)   ; 24pt,81列32行, MBA11@CocoaEmacs, プレゼン用
+        ;("1366x768@23" 24  nil 32)   ; 24pt,81列32行, MBA11@CocoaEmacs, プレゼン用
         ("1366x768@22" 16  nil 34)   ; 16pt,81列34行, MBA11@CarbonEmacs
         ("1280x800@22" nil nil 45)   ; 14pt,81列45行, MBP@CarbonEmacs
         (nil           14  81  59))) ; 14pt,81列59行, デフォルト設定
@@ -155,7 +219,7 @@
               (x-display-pixel-width)
               (x-display-pixel-height)
               emacs-major-version))
-(setq my-font-size nil)
+(defvar my-font-size nil)
 (let* ((list-merge
         (lambda (list1 list2)
           (if (and (not list1) (not list2))
@@ -196,16 +260,13 @@
   (cond ((eq emacs-major-version 22)
          ;; Carbon Emacs
          (require 'carbon-font)
-         (when (fboundp 'fixed-width-set-fontset)
-           (fixed-width-set-fontset "osaka" my-font-size))
+         (exec-if-bound (fixed-width-set-fontset "osaka" my-font-size))
          (setq fixed-width-rescale nil)
          ;; 日本語入力のオン／オフに応じてカーソルの色を変更
-         (when (fboundp 'mac-set-input-method-parameter)
-           (mac-set-input-method-parameter
-            'roman 'cursor-color my-roman-cursor-color)
-           (mac-set-input-method-parameter
-            'japanese 'cursor-color my-japanese-cursor-color))
-         )
+         (exec-if-bound (mac-set-input-method-parameter
+                         'roman 'cursor-color my-roman-cursor-color))
+         (exec-if-bound (mac-set-input-method-parameter
+                         'japanese 'cursor-color my-japanese-cursor-color)))
         ((>= emacs-major-version 23)
          ;; Cocoa Emacs
          ;; フォントセットを作る
@@ -214,10 +275,8 @@
                 (asciifont "Menlo") ; ASCIIフォント
                 (jpfont "Hiragino Maru Gothic ProN") ; 日本語フォント
                 (font (format "%s-%d:weight=normal:slant=normal" asciifont size))
-                (fontspec (if (fboundp 'font-spec)
-                              (font-spec :family asciifont) nil))
-                (jp-fontspec (if (fboundp 'font-spec)
-                                 (font-spec :family jpfont) nil))
+                (fontspec (exec-if-bound (font-spec :family asciifont)))
+                (jp-fontspec (exec-if-bound (font-spec :family jpfont)))
                 (fsn (create-fontset-from-ascii-font font nil fontset-name)))
            (set-fontset-font fsn 'japanese-jisx0213.2004-1 jp-fontspec)
            (set-fontset-font fsn 'japanese-jisx0213-2 jp-fontspec)
@@ -241,8 +300,7 @@
          (set-face-font 'default "fontset-myfonts")
          (setq-default line-spacing 0.15)
          ;; Cocoa Emacsで、全角記号が入れられなくなる問題を解消
-         (when (fboundp 'mac-add-key-passed-to-system)
-           (mac-add-key-passed-to-system 'shift))
+         (exec-if-bound (mac-add-key-passed-to-system 'shift))
          ;; 以下、inline-patch が有効なときのための設定
          ;; Cocoa EmacsがIME状態を理解するように
          (setq default-input-method "MacOSX")
@@ -275,17 +333,13 @@
   (setq mac-command-modifier 'meta)
   (setq grep-find-use-xargs 'bsd)
   (setq browse-url-generic-program "open")
-  (when (fboundp 'mac-add-ignore-shortcut)
-    ;; Ctrl+SpaceをSpotLight＆ことえりに取られないようにする
-    (mac-add-ignore-shortcut '(control ? ))
-    )
+  ;; Ctrl+SpaceをSpotLight＆ことえりに取られないようにする
+  (exec-if-bound (mac-add-ignore-shortcut '(control ? )))
   )
 
 ;; hide menubar/toolbar
-(when (fboundp 'menu-bar-mode)
-  (menu-bar-mode 0))
-(when (fboundp 'tool-bar-mode)
-  (tool-bar-mode 0))
+(exec-if-bound (menu-bar-mode 0))
+(exec-if-bound (tool-bar-mode 0))
 
 ;; http://sakito.jp/emacs/emacsshell.html#path
 ;; 後に記述したものの方が PATH の先頭に追加されます
@@ -315,8 +369,7 @@
   (setq focus-follows-mouse nil))
 
 ;; turn on font-lock mode
-(when (fboundp 'global-font-lock-mode)
-  (global-font-lock-mode t))
+(exec-if-bound (global-font-lock-mode t))
 
 ;; enable visual feedback on selections
 ;;(setq transient-mark-mode t)
@@ -337,31 +390,24 @@
     (setq default-input-method "japanese-anthy"))
 
 ;; スクリプトっぽかったら勝手に実行ビットを立てる
-(defun make-script-executable ()
-  "バッファがスクリプトっぽかったら実行ビットを立てる"
-  (interactive)
-  (save-restriction
-    (widen)
-    (let* ((name (buffer-file-name))
-           (mode (file-modes name)))
-      (and (string= "#!" (buffer-substring 1 (min 3 (point-max))))
-           (not (string-match ":" name))
-           (not (string-match "/\\.[^/]+$" name))
-           (set-file-modes name
-                           (logior mode (logand (/ mode 4) 73)))
-           (message (concat "Wrote " name " (+x)"))))))
-(add-hook 'after-save-hook 'make-script-executable)
+;(defun make-script-executable ()
+;  "バッファがスクリプトっぽかったら実行ビットを立てる"
+;  (interactive)
+;  (save-restriction
+;    (widen)
+;    (let* ((name (buffer-file-name))
+;           (mode (file-modes name)))
+;      (and (string= "#!" (buffer-substring 1 (min 3 (point-max))))
+;           (not (string-match ":" name))
+;           (not (string-match "/\\.[^/]+$" name))
+;           (set-file-modes name
+;                           (logior mode (logand (/ mode 4) 73)))
+;           (message (concat "Wrote " name " (+x)"))))))
+;(add-hook 'after-save-hook 'make-script-executable)
 
-;;;
-;;; Twittering mode
-;;;
-(autoload 'twittering-mode "twittering-mode" "Major mode for Twitter" t nil)
-(add-hook 'twittering-mode-hook
-          (lambda ()
-            (setq twittering-username "hnw")
-            (setq twittering-timer-interval 300)
-            (when (fboundp 'twittering-icon-mode)
-              (twittering-icon-mode))))
+;; スクリプトっぽかったら勝手に実行ビットを立てる
+;; http://www.emacswiki.org/emacs/MakingScriptsExecutableOnSave
+;(add-hook 'after-save-hook 'executable-make-buffer-file-executable-if-script-p)
 
 ;;;
 ;;; Org mode
@@ -373,35 +419,6 @@
   (global-set-key "\C-ca" 'org-agenda)
   (global-set-key "\C-cb" 'org-iswitchb))
 
-;;; settings for italk
-(autoload 'italk "italk" "Inter talk" t nil)
-(autoload 'italk-other-frame "italk" "Inter talk" t nil)
-(setq italk-user-name "はなわ")
-(setq italk-server "old.hnw.jp")
-(setq italk-secondary-servers
-      '( ;;("host [port [username]]")
-        ("") ; The first item is to be displayed at completion. (C-u M-x italk)
-        ("ganaware.jp 12345")
-        ("main.italk.ne.jp 12345")
-        ("sub.italk.ne.jp 12345")
-        ("localhost 12345")
-        ))
-(setq italk-netscape-program-name "open")
-
-;; settings for riece (IRC client)
-(autoload 'riece "riece" "Start Riece" t)
-(setq riece-server-alist
-      '(("tokoy.irc.tokyo.wide.ad.jp" :host "irc.tokyo.wide.ad.jp")
-        ("")
-        ("WIDE Project Kyoto NOC, Japan" . "irc.kyoto.wide.ad.jp")
-        ("WIDE Project Tokyo NOC, Japan" . "irc.tokyo.wide.ad.jp")
-        ("Hokkaido University, Sapporo, Japan" . "irc.huie.hokudai.ac.jp")
-        ("DTI, Akasaka Tokyo, Japan" . "irc.dti.ne.jp")
-        ("WIDE Project Fujisawa NOC, Japan" . "irc.fujisawa.wide.ad.jp")
-        ("WIDE Project Kyoto NOC, Japan (IPv6)" . "irc6.kyoto.wide.ad.jp")))
-
-;; settings for text file
-
 ;; settings for PHP
 (autoload 'php-mode "php-mode" "Major mode for editing php code." t)
 (add-to-list 'auto-mode-alist '("\\.php$" . php-mode))
@@ -409,9 +426,8 @@
       "/usr/lib/php/data/phpman/php-chunked-xhtml/index.html")
 (add-hook 'php-mode-hook
           (lambda ()
-            (when (and (require 'cc-subword nil t)
-                       (fboundp 'c-subword-mode))
-              (c-subword-mode 1))
+            (when (require 'cc-subword nil t)
+              (exec-if-bound (c-subword-mode 1)))
             (c-set-style hnw/default-php-indentation-style)
             ;; C-c RET: php-browse-manual
             (if (file-readable-p local-php-manual-path)
@@ -571,16 +587,14 @@
 
 ;; key bindings
 (load "term/bobcat")
-(when (fboundp 'terminal-init-bobcat)
-  (terminal-init-bobcat))
+(exec-if-bound (terminal-init-bobcat))
 ;;(global-set-key "\M-j" 'goto-line)
 (global-set-key "\M-n" 'browse-url-at-point)
 (global-set-key "\M-2" 'make-frame)
 (global-set-key "\M-0" 'delete-frame)
 
 ;; C-RETで全画面表示(Cocoa Emacs用)
-(when (fboundp 'ns-toggle-fullscreen)
-  (global-set-key "\C-\M-m" 'ns-toggle-fullscreen))
+(global-set-key "\C-\M-m" 'ns-toggle-fullscreen)
 
 ;;(require 'wdired)
 ;;(define-key dired-mode-map "r" 'wdired-change-to-wdired-mode)
@@ -594,36 +608,40 @@
 
 ;; ミニバッファ履歴リストの最大長：デフォルトでは30!
 (setq history-length t)
+
 ;;; session.el
 ;; kill-ringやミニバッファで過去に開いたファイルなどの履歴を保存する
-(when (require 'session nil t)
-  (setq session-initialize '(de-saveplace session keys menus places))
-  (setq session-globals-include '((kill-ring 50)
-                                  (session-file-alist 500 t)
-                                  (file-name-history 10000)))
-  (add-hook 'after-init-hook 'session-initialize)
-  ;; 前回閉じたときの位置にカーソルを復帰
-  (setq session-undo-check -1))
+;(when (require 'session nil t)
+;  (setq session-initialize '(de-saveplace session keys menus places))
+;  (setq session-globals-include '((kill-ring 50)
+;                                  (session-file-alist 500 t)
+;                                  (file-name-history 10000)))
+;  (add-hook 'after-init-hook 'session-initialize)
+;  ;; 前回閉じたときの位置にカーソルを復帰
+;  (setq session-undo-check -1))
 
 ;; iswitchb
-(iswitchb-mode t)
+;(iswitchb-mode t)
+
 ;; minibuf-isearch: minibufでisearchを使えるようにする。
 ;;    session.elと組み合わせると便利さを痛感。
 ;; http://www.sodan.org/~knagano/emacs/minibuf-isearch/
-(require 'minibuf-isearch nil t)
+;(require 'minibuf-isearch nil t)
+
 ;; mcomplete
-(when (require 'mcomplete nil t)
-  (when (fboundp 'turn-on-mcomplete-mode)
-    (turn-on-mcomplete-mode))
-  (custom-set-faces
-   '(mcomplete-prefix-method-fixed-part-face
-     ((t (:foreground "CadetBlue" :weight bold))))
-   '(mcomplete-prefix-method-alternative-part-face
-     ((t (:foreground "CadetBlue"))))
-   '(mcomplete-substr-method-fixed-part-face
-     ((t (:foreground "MediumVioletRed" :weight bold))))
-   '(mcomplete-substr-method-alternative-part-face
-     ((t (:foreground "MediumVioletRed"))))))
+;(when (require 'mcomplete nil t)
+;  (when (fboundp 'turn-on-mcomplete-mode)
+;    (turn-on-mcomplete-mode))
+;  (custom-set-faces
+;   '(mcomplete-prefix-method-fixed-part-face
+;     ((t (:foreground "CadetBlue" :weight bold))))
+;   '(mcomplete-prefix-method-alternative-part-face
+;     ((t (:foreground "CadetBlue"))))
+;   '(mcomplete-substr-method-fixed-part-face
+;     ((t (:foreground "MediumVioletRed" :weight bold))))
+;   '(mcomplete-substr-method-alternative-part-face
+;     ((t (:foreground "MediumVioletRed"))))))
+
 ;;(when (require 'completing-help nil t)
 ;;  (turn-on-completing-help-mode))
 
@@ -743,10 +761,8 @@
               (string-match "\.py$" file)
               (string-match "\.rb$" file))
       (when (require 'yasnippet nil t)
-        (when (fboundp 'yas/initialize)
-          (yas/initialize))
-        (when (fboundp 'yas/load-directory)
-          (yas/load-directory (expand-file-name "~/lib/emacs/snippets/"))))
+        (exec-if-bound (yas/initialize))
+        (exec-if-bound (yas/load-directory (expand-file-name "~/lib/emacs/snippets/"))))
       (ad-deactivate 'find-file)
       (ad-disable-advice 'find-file 'before 'my-yasnippet-invoke) ; 自分を消す
       (ad-activate 'find-file)
@@ -766,52 +782,6 @@
              (when flymake-is-active-flag
                (flymake-mode-on)
                (setq flymake-is-active-flag nil))))
-
-;; タブ, 全角スペース、改行直前の半角スペースを表示する
-;; http://homepage3.nifty.com/satomii/software/elisp.ja.html
-(when (require 'jaspace nil t)
-  (setq jaspace-modes (append jaspace-modes
-                                (list 'php-mode
-                                      'javascript-mode
-                                      'python-mode
-                                      'ruby-mode
-                                      'xml-mode
-                                      'nxml-mode
-                                      'yaml-mode
-                                      'text-mode
-                                      'fundamental-mode)))
-  (setq jaspace-alternate-jaspace-string "□")
-  (setq jaspace-highlight-tabs ?^)
-  (add-hook 'jaspace-mode-off-hook
-            (lambda()
-              (setq show-trailing-whitespace nil)))
-  (add-hook 'jaspace-mode-hook
-            (lambda()
-              (setq show-trailing-whitespace t)
-              (face-spec-set 'jaspace-highlight-jaspace-face
-                             '((((class color) (background light))
-                                (:foreground "blue"))
-                               (t (:foreground "green"))))
-              (face-spec-set 'jaspace-highlight-tab-face
-                             '((((class color) (background light))
-                                (:foreground "red"
-                                             :background "unspecified"
-                                             :strike-through nil
-                                             :underline t))
-                               (t (:foreground "purple"
-                                               :background "unspecified"
-                                               :strike-through nil
-                                               :underline t))))
-              (face-spec-set 'trailing-whitespace
-                             '((((class color) (background light))
-                                (:foreground "red"
-                                             :background "unspecified"
-                                             :strike-through nil
-                                             :underline t))
-                               (t (:foreground "purple"
-                                               :background "unspecified"
-                                               :strike-through nil
-                                               :underline t)))))))
 
 ;; dabbrev/abbrev関連
 ;; 参考：http://www.math.s.chiba-u.ac.jp/~matsu/emacs/emacs21/abbrev.html
@@ -930,11 +900,11 @@
 ;; 思ったように動かなかった…
 ;; (require 'flymake-cursor)
 
-(setq sql-mysql-program "/usr/local/bin/mysql")
-(setq sql-user "hnw")
-(setq sql-password "")
-(setq sql-server "localhost")
-(setq sql-mysql-options "")
+;(setq sql-mysql-program "/usr/local/bin/mysql")
+;(setq sql-user "hnw")
+;(setq sql-password "")
+;(setq sql-server "localhost")
+;(setq sql-mysql-options "")
 
 ;; anything.el
 
@@ -943,8 +913,7 @@
   (require 'anything-config)
   (require 'anything-match-plugin)
   (require 'anything-complete)
-  (when (fboundp 'anything-read-string-mode)
-    (anything-read-string-mode 1))
+  (exec-if-bound (anything-read-string-mode 1))
   (require 'anything-show-completion)
   (global-set-key "\C-x\C-b" 'anything-filelist+)
   (global-set-key "\M-y" 'anything-show-kill-ring)

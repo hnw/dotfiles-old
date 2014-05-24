@@ -21,4 +21,7 @@ compinit
 # load every completion after autocomplete loads
 for config_file ($ZSH/**/completion.zsh) source $config_file
 
-eval "$(phpenv init -)"
+if $(phpenv &>/dev/null)
+then
+  eval "$(phpenv init -)"
+fi

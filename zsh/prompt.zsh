@@ -77,7 +77,14 @@ if [ -n "${REMOTEHOST}${SSH_CONNECTION}" ] ; then
   PROMPT_SSH="@%{$fg_bold[yellow]%}${HOST%%.*}%{$reset_color%} "
 fi
 
-export PROMPT=$'\n'${PROMPT_SSH}$'in $(directory_name) $(git_dirty)$(need_push)\n› '
+case "$TERM" in
+  dumb | emacs)
+    export PROMPT="%m:%~> "
+    ;;
+  *)
+    export PROMPT=$'\n'${PROMPT_SSH}$'in $(directory_name) $(git_dirty)$(need_push)\n› '
+    ;;
+esac
 
 set_prompt () {
   export RPROMPT="%{$fg_bold[cyan]%}$(todo)%{$reset_color%}"

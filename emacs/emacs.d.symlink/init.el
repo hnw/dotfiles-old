@@ -813,7 +813,7 @@
 ;; ただし、TRAMPでssh接続している場合auto-saveと相性が悪すぎるので除外
 ;; また、auto-save-buffersと最近のhaskell-modeの相性が悪いので除外
 (when (require 'auto-save-buffers nil t)
-  (run-with-idle-timer 0.5 t 'auto-save-buffers "" "^\\(sshx?:.*\\|.*\\.hs\\)$"))
+  (run-with-idle-timer 0.5 t 'auto-save-buffers "" "^\\(/sshx?:.*\\|.*\\.hs\\)$"))
 
 ;; keychain ENV setting (for MacOSX 10.4 only?)
 ;(if (require 'keychain-environment nil t)

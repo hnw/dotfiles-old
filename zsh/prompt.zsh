@@ -74,7 +74,7 @@ directory_name(){
 # SSH接続時にホスト名をプロンプトに表示
 PROMPT_SSH=""
 if [ -n "${REMOTEHOST}${SSH_CONNECTION}" ] ; then
-  PROMPT_SSH="%{$fg_bold[yellow]%}${HOST%%.*}%{$reset_color%} "
+  PROMPT_SSH="@%{$fg_bold[yellow]%}${HOST%%.*}%{$reset_color%} "
 fi
 
 export PROMPT=$'\n'${PROMPT_SSH}$'in $(directory_name) $(git_dirty)$(need_push)\n› '

@@ -532,7 +532,9 @@
 ;; settings for C++
 (add-hook 'c++-mode-hook
           (lambda ()
-            (setq indent-tabs-mode nil)))
+            (setq c-basic-offset 4
+                  tab-width 4
+                  indent-tabs-mode nil)))
 
 ;; settings for C#
 ;; http://ongaeshi.hatenablog.com/entry/20110116/1295187496
@@ -662,6 +664,27 @@
 
 ;; flymake (Emacs22から標準添付されている)
 (when (require 'flymake nil t)
+  ;; flymake を使えない場合をチェック
+  ;; http://moimoitei.blogspot.jp/2010/05/flymake-in-emacs.html
+  (defadvice flymake-can-syntax-check-file
+    (after my-flymake-can-syntax-check-file activate)
+    (cond
+     ((not ad-return-value))
+     ;; tramp 経由であれば、無効
+     ((and (fboundp 'tramp-list-remote-buffers)
+	   (memq (current-buffer) (tramp-list-remote-buffers)))
+      (setq ad-return-value nil))
+     ;; 書き込み不可ならば、flymakeは無効
+     ((not (file-writable-p buffer-file-name))
+      (setq ad-return-value nil))
+     ;; flymake で使われるコマンドが無ければ無効
+     ((let ((cmd (nth 0 (prog1
+			    (funcall (flymake-get-init-function buffer-file-name))
+			  (funcall (flymake-get-cleanup-function buffer-file-name))))))
+	(and cmd (not (executable-find cmd))))
+      (setq ad-return-value nil))
+     ))
+
   (global-set-key "\C-cd" 'flymake-display-err-menu-for-current-line)
   (add-hook 'perl-mode-hook
             '(lambda() (flymake-mode t)))
@@ -679,7 +702,6 @@
                                         temp-file
                                         (file-name-directory buffer-file-name))))
                      (list "php" (list "-f" local-file "-l")))))
-
                (setq flymake-allowed-file-name-masks
                      (append
                       flymake-allowed-file-name-masks
@@ -688,14 +710,7 @@
                      (cons
                       '("\\(\\(?:Parse error\\|Fatal error\\|Warning\\): .*\\) in \\(.*\\) on line \\([0-9]+\\)" 2 3 nil 1)
                       flymake-err-line-patterns))
-               (cond
-                ((and (featurep 'tramp)
-                      tramp-mode
-                      (tramp-tramp-file-p default-directory))
-                 ;; TRAMPのファイルだったらflymakeを無効にする
-                 (flymake-mode nil))
-                (t
-                 (flymake-mode t)))))
+               ))
   (add-hook 'yaml-mode-hook
             '(lambda()
                ;; YAML用設定
@@ -796,6 +811,7 @@
          ((eq 0 (string-match (expand-file-name "~/.zsh-functions/") name)) nil)
          ((eq 0 (string-match (file-truename "~/.zsh-functions/") name)) nil)
          ((string-match "^/sudo:[^/]*:/" name) nil)
+         ((string-match "^/ssh:[^/]*:/" name) nil)
          ((string-match "^/multi:[^/]*:sudo:[^/]*:/" name) nil)
          (t (normal-backup-enable-predicate name)))))
 
@@ -805,6 +821,7 @@
 (setq auto-save-file-name-transforms
       `((".*/Dropbox/.*" ,(expand-file-name "~/tmp/") t)
         ("^/sudo:[^/]*:/.*" ,(expand-file-name "~root/tmp/") t)
+        ("^/ssh:[^/]*:/.*" ,(expand-file-name "~/tmp/") t)
         ("^/multi:[^/]*:sudo:.*" ,(expand-file-name "~root/tmp/") t)))
 
 ;; auto-save-buffers: Emacsでファイルの自動保存

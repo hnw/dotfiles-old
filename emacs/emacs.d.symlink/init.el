@@ -390,24 +390,8 @@
     (setq default-input-method "japanese-anthy"))
 
 ;; スクリプトっぽかったら勝手に実行ビットを立てる
-;(defun make-script-executable ()
-;  "バッファがスクリプトっぽかったら実行ビットを立てる"
-;  (interactive)
-;  (save-restriction
-;    (widen)
-;    (let* ((name (buffer-file-name))
-;           (mode (file-modes name)))
-;      (and (string= "#!" (buffer-substring 1 (min 3 (point-max))))
-;           (not (string-match ":" name))
-;           (not (string-match "/\\.[^/]+$" name))
-;           (set-file-modes name
-;                           (logior mode (logand (/ mode 4) 73)))
-;           (message (concat "Wrote " name " (+x)"))))))
-;(add-hook 'after-save-hook 'make-script-executable)
-
-;; スクリプトっぽかったら勝手に実行ビットを立てる
 ;; http://www.emacswiki.org/emacs/MakingScriptsExecutableOnSave
-;(add-hook 'after-save-hook 'executable-make-buffer-file-executable-if-script-p)
+(add-hook 'after-save-hook 'executable-make-buffer-file-executable-if-script-p)
 
 ;;;
 ;;; Org mode

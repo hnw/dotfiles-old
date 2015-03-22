@@ -72,3 +72,6 @@ setw -g monitor-activity on
 set -g visual-activity on
 ## ステータスバーを上部に表示する
 set -g status-position top
+
+## ヒストリを10万行に
+set-option -g history-limit 100000

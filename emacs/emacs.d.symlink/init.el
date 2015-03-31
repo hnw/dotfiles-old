@@ -30,6 +30,7 @@
     haskell-mode
     csharp-mode
     yaml-mode
+    go-mode
     open-junk-file
     gtags
     anything

@@ -1,4 +1,5 @@
 sdk_path_candidates=(
+    "$HOME/Development/adt-bundle-mac-x86_64/sdk"
     "$HOME/Development/adt-bundle-mac-x86_64-20131030/sdk"
 )
 
